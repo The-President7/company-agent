@@ -6,11 +6,11 @@ import secrets
 import uuid
 import streamlit as st
 from sqlalchemy import func, select
-from company_agent.config import settings
-from company_agent.db import SessionLocal, init_db
-from company_agent.models import AuditEvent, Connector, MonitorEvent, MonitorIssue, MonitorProject, Report, SourceEvent
-from company_agent.api import _llm_answer, _render_report_pdf
-from company_agent.services import audit, draft_report, ensure_workspace, review_report, search_events
+from config import settings
+from db import SessionLocal, init_db
+from models import AuditEvent, Connector, MonitorEvent, MonitorIssue, MonitorProject, Report, SourceEvent
+from api import _llm_answer, _render_report_pdf
+from services import audit, draft_report, ensure_workspace, review_report, search_events
 
 st.set_page_config(page_title="Secretary · The President", page_icon="🗂️", layout="wide")
 

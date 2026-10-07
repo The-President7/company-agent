@@ -2,7 +2,7 @@
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
-from .config import settings
+from config import settings
 
 
 class Base(DeclarativeBase):
@@ -24,5 +24,5 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 def init_db() -> None:
     # Import models before create_all so their tables are registered on Base.
-    from . import models  # noqa: F401
+    import models  # noqa: F401
     Base.metadata.create_all(engine)

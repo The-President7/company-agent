@@ -21,10 +21,10 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .config import settings
-from .db import SessionLocal, init_db
-from .models import Connector, MonitorEvent, MonitorIssue, MonitorProject, Report, SourceEvent
-from .services import audit, ensure_workspace, search_events
+from config import settings
+from db import SessionLocal, init_db
+from models import Connector, MonitorEvent, MonitorIssue, MonitorProject, Report, SourceEvent
+from services import audit, ensure_workspace, search_events
 
 app = FastAPI(title="Secretary Platform", version="0.2.0")
 bearer = HTTPBearer(auto_error=False)
@@ -37,7 +37,7 @@ app.add_middleware(CORSMiddleware,
 
 def run():
     import uvicorn
-    uvicorn.run("company_agent.api:app", host="0.0.0.0", port=8000)
+    uvicorn.run("api:app", host="0.0.0.0", port=8000)
 
 
 def _db():

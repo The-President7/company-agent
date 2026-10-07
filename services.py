@@ -5,8 +5,8 @@ import re
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from .config import settings
-from .models import AuditEvent, Connector, Report, SourceEvent, Workspace
+from config import settings
+from models import AuditEvent, Connector, Report, SourceEvent, Workspace
 
 
 def audit(db: Session, action: str, target_type: str, target_id: str = "", details: str = "") -> None:

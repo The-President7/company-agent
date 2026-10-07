@@ -14,7 +14,10 @@ dependencies = [
 ]
 
 [project.scripts]
-secretary-api = "company_agent.api:run"
+secretary-api = "api:run"
 
 [tool.uv]
 package = true
+
+[tool.setuptools]
+py-modules = ["api", "app", "config", "db", "models", "services"]
