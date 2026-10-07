@@ -1,0 +1,2 @@
+[console_scripts]
+secretary-api = api:run

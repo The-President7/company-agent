@@ -1,0 +1,15 @@
+LICENSE
+README.md
+api.py
+app.py
+config.py
+db.py
+models.py
+pyproject.toml
+services.py
+company_secretary.egg-info/PKG-INFO
+company_secretary.egg-info/SOURCES.txt
+company_secretary.egg-info/dependency_links.txt
+company_secretary.egg-info/entry_points.txt
+company_secretary.egg-info/requires.txt
+company_secretary.egg-info/top_level.txt

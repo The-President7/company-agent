@@ -1,3 +1,5 @@
+// secretary-monitor JavaScript SDK
+
 class SecretaryMonitor {
   constructor({ dsn, projectKey, endpoint, environment = "production", release = "" }) {
     this.projectKey = projectKey || dsn;
@@ -6,7 +8,7 @@ class SecretaryMonitor {
     this.release = release;
     if (!this.projectKey) throw new Error("SecretaryMonitor requires projectKey");
   }
-
+// asynchronous function to capture an exception and send it to the Secretary Monitor server
   async captureException(error, context = {}) {
     const value = error instanceof Error ? error : new Error(String(error));
     return this._send({

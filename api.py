@@ -3,7 +3,11 @@
 import hashlib
 import hmac
 import json
+import math
+import re
 import secrets
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -12,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from reportlab.lib import colors
@@ -33,6 +38,57 @@ app.add_middleware(CORSMiddleware,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Project-Key"],
 )
+
+_rate_lock = threading.Lock()
+_rate_windows: dict[str, tuple[float, int]] = {}
+
+
+def _consume_rate_limit(key: str, limit: int, window_seconds: int) -> int | None:
+    """Return retry seconds when a fixed-window quota is exhausted."""
+    now = time.monotonic()
+    window_seconds = max(1, window_seconds)
+    limit = max(1, limit)
+    with _rate_lock:
+        current = _rate_windows.get(key)
+        if current is None and len(_rate_windows) >= 4096:
+            expired = [name for name, (opened, _) in _rate_windows.items()
+                       if now - opened >= window_seconds]
+            for name in expired:
+                _rate_windows.pop(name, None)
+            if len(_rate_windows) >= 4096:
+                # Fail closed during unusually high client churn instead of
+                # letting attacker-controlled client addresses grow memory.
+                return window_seconds
+        start, count = current or (now, 0)
+        if now - start >= window_seconds:
+            start, count = now, 0
+        if count >= limit:
+            return max(1, math.ceil(window_seconds - (now - start)))
+        _rate_windows[key] = (start, count + 1)
+        if len(_rate_windows) > 4096:
+            expired = [name for name, (opened, _) in _rate_windows.items()
+                       if now - opened >= window_seconds]
+            for name in expired:
+                _rate_windows.pop(name, None)
+        return None
+
+
+@app.middleware("http")
+async def limit_api_requests(request: Request, call_next):
+    # Use the direct peer address. Forwarded headers are client-controlled unless
+    # a separately configured trusted-proxy layer sanitizes them.
+    client_ip = request.client.host if request.client else "unknown"
+    retry_after = _consume_rate_limit(
+        f"api:{client_ip}", settings.api_rate_limit_requests,
+        settings.api_rate_limit_window_seconds,
+    )
+    if retry_after is not None:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "API rate limit exceeded"},
+            headers={"Retry-After": str(retry_after)},
+        )
+    return await call_next(request)
 
 
 def run():
@@ -90,6 +146,12 @@ def _json_request(url: str, *, token: str, method: str = "GET", payload=None):
 def _llm_answer(question: str, evidence: list[SourceEvent]) -> str:
     if not settings.llm_api_key:
         raise HTTPException(503, "Configure LLM_API_KEY to enable agent answers")
+    retry_after = _consume_rate_limit(
+        f"llm:{settings.workspace_id}", settings.llm_rate_limit_requests,
+        settings.llm_rate_limit_window_seconds,
+    )
+    if retry_after is not None:
+        raise HTTPException(429, "LLM rate limit exceeded", headers={"Retry-After": str(retry_after)})
     evidence_text = "\n\n".join(
         f"[{i}] {e.title}\nSource: {e.source_url}\nProvider: {e.provider}; scope: {e.source_scope}; "
         f"date: {e.occurred_at.isoformat()}\n{e.content[:5000]}"
@@ -108,9 +170,24 @@ def _llm_answer(question: str, evidence: list[SourceEvent]) -> str:
     try:
         with urllib.request.urlopen(req, timeout=60) as response:
             data = json.loads(response.read())
-        return data["choices"][0]["message"]["content"]
-    except (urllib.error.URLError, TimeoutError, KeyError, IndexError, json.JSONDecodeError) as exc:
+        answer = data["choices"][0]["message"]["content"]
+        if not isinstance(answer, str) or not answer.strip():
+            raise HTTPException(502, "LLM returned an empty or invalid answer")
+        return _validate_llm_answer(answer, len(evidence))
+    except HTTPException:
+        raise
+    except (urllib.error.URLError, TimeoutError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
         raise HTTPException(502, f"LLM provider request failed: {exc}") from exc
+
+
+def _validate_llm_answer(answer: str, evidence_count: int) -> str:
+    """Reject absent citations and citation markers outside the supplied evidence."""
+    citations = [int(value) for value in re.findall(r"\[(\d+)\]", answer)]
+    if any(citation < 1 or citation > evidence_count for citation in citations):
+        raise HTTPException(502, "LLM answer cited evidence that was not supplied")
+    if evidence_count and not citations:
+        raise HTTPException(502, "LLM answer did not cite the supplied evidence")
+    return answer.strip()
 
 
 @app.on_event("startup")
