@@ -1,0 +1,1 @@
+"""Secretary company operations assistant."""

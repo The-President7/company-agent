@@ -1,0 +1,7 @@
+{
+  "name": "@the-president/secretary-monitor",
+  "version": "0.1.0",
+  "description": "Send errors and performance events to Secretary Monitor",
+  "main": "index.js",
+  "license": "UNLICENSED"
+}
